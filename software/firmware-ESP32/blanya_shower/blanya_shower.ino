@@ -1,18 +1,17 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
-#include <Sounds.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include <Sounds.h> 
+#include <OneWire.h> 
+#include <DallasTemperature.h> 
 #include <Adafruit_NeoPixel.h>
 #include <BluetoothSerial.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
-#include "cert.h"
 #include <lvgl.h>
 #include "ui.h"
 
-/* Other used Ports
+/* Other used Ports 
 Check screen ports .\libraries\TFT_eSPI\User_Setups\Setup46_GC9A01_ESP32.h
 */
 
@@ -45,6 +44,7 @@ static lv_color_t buf[screenWidth * 10];
 #define TransOnHeatElement 26
 #define NeopixelOut 27        
 
+
 #define NUMPIXELS 8
 
 float DesiredTemperature;
@@ -55,8 +55,23 @@ double TemperatureCelsius = 0;
 bool Play = false;
 String message = "";
 bool ErrorReadingTemperature = false;
+double rMainPower = 0;
 
 bool unique = true;
+int BatteryReadings [6] = {0,0,0,0,0,0};
+int readIndex = 0;
+int totalReadingsBattery = 0;
+double averageBatteryReading = 0;
+
+int pressure2Readings [6] = {0,0,0,0,0,0};
+int totalReadingPressure2 = 0;
+double averagePressure2 = 0;
+
+int mainPowerReadings [6] = {0,0,0,0,0,0};
+int readIndexMainPower = 0;
+int totalReadingsMainPower = 0;
+double averageMainPowerReading = 0;
+
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ReadTemperature);
@@ -225,29 +240,36 @@ void loop()
           
           message = "";
       } 
-  }
+    }
 
-  temperatureSensor.requestTemperatures();
-  if (TemperatureCelsius != DEVICE_DISCONNECTED_C)
-  {
-    TemperatureCelsius = temperatureSensor.getTempCByIndex(0);
-    ErrorReadingTemperature = false; 
-  }
-  else {
-    ErrorReadingTemperature = true; 
-  }
+    temperatureSensor.requestTemperatures();
+    if (TemperatureCelsius != DEVICE_DISCONNECTED_C)
+    {
+      TemperatureCelsius = temperatureSensor.getTempCByIndex(0);
+      ErrorReadingTemperature = false; 
+    }
+    else {
+      ErrorReadingTemperature = true; 
+    }
   
-  if (analogRead(ReadMainPower) > 1000)
-  {
-    MainPower = true;
-    Battery = false;
-    PendingToShutdown = true;
-  }
-  else
-  {
-    MainPower = false;
-    Battery = true;
-  }
+    rMainPower = analogRead(ReadMainPower);
+    totalReadingsMainPower -= mainPowerReadings[readIndexMainPower];
+    mainPowerReadings[readIndexMainPower] = rMainPower;
+    totalReadingsMainPower += rMainPower;
+    averageMainPowerReading = totalReadingsMainPower / 6;  
+    readIndexMainPower = (readIndexMainPower +1) % 6;
+    
+    if (averageMainPowerReading > 800)
+    {
+      MainPower = true;
+      Battery = false;
+      PendingToShutdown = true;
+    }
+    else
+    {
+      MainPower = false;
+      Battery = true;
+    }
 }
 
 void loop2(void * pvParameters)
@@ -282,8 +304,30 @@ void loop2(void * pvParameters)
       unique = true;
     }
 
-    lv_label_set_text(ui_temperatureNumber, String(TemperatureCelsius, 0).c_str());
-    lv_arc_set_value(ui_uiTemperatureGauge,TemperatureCelsius);
+    int batteryLevel = analogRead(ReadBatteryPower);
+    double pTop = analogRead(ReadPressureTop);
+    double pBottom = analogRead(ReadPressureBottom);
+
+
+    totalReadingsBattery -= BatteryReadings[readIndex];
+    BatteryReadings[readIndex] = batteryLevel;
+    totalReadingsBattery += batteryLevel;
+
+    averageBatteryReading = totalReadingsBattery / 6;  
+    double batteryPercentage = ((averageBatteryReading - 2200) * 100) / (2750 - 2200); 
+
+    totalReadingPressure2 -= pressure2Readings[readIndex];
+    pressure2Readings[readIndex] = pBottom;
+    totalReadingPressure2 += pBottom;
+    averagePressure2 = totalReadingPressure2 / 6;  
+
+    readIndex = (readIndex +1) % 6;
+
+    lv_label_set_text(ui_NumTemperature, String(TemperatureCelsius, 1).c_str()); 
+    lv_label_set_text(ui_NumUserTemp, String(DesiredTemperature, 1).c_str());
+    lv_label_set_text(ui_NumPressureTop, String(pTop, 0).c_str());
+    lv_label_set_text(ui_NumPressureBottom, String(averagePressure2, 0).c_str());
+    lv_label_set_text(ui_NumBattery, String(batteryPercentage, 0).c_str());
 
     vTaskDelay(10);
 
@@ -295,13 +339,15 @@ void ShowerPlanner()
     // Non stop execution time
 
     if(Play){
-      lv_label_set_text(ui_Label4, "Pause");
+      lv_label_set_text(ui_ButtonStart, "Pause");
     } else {
-      lv_label_set_text(ui_Label4, "Play");
+      lv_label_set_text(ui_ButtonStart, "Play");
     }
 
     if(MainPower){
-      
+
+     lv_obj_add_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
+
      digitalWrite(TransOnSolenoidMotor, LOW); // To avoid pressure accumulation
      int colors [3] = {255,69,0};
      PixelsLight(colors);  
@@ -313,7 +359,7 @@ void ShowerPlanner()
           Play = false;
         }
 
-      if(Play){
+      if(Play && averagePressure2 > 10){
           digitalWrite(TransOnHeatElement, HIGH); // Start relay, heat water.
           airPumpIn(220);
       }
@@ -326,15 +372,18 @@ void ShowerPlanner()
 
     
     if(Battery){
+     digitalWrite(TransOnHeatElement, LOW); // Shutdown relay
      digitalWrite(TransOnSolenoidMotor, HIGH); // Pressure accumulation
      int colors [3] = {255,255,255};
      PixelsLight(colors);  
      
       if(Play){
          airPumpIn(255);
+         lv_obj_add_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
       }
       else {
          airPumpIn(0);
+         lv_obj_clear_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
@@ -344,6 +393,13 @@ void ShowerPlanner()
       UserSounds.Shutdown();
       digitalWrite(ShutdownESP32, HIGH); //To shutdown all
       delay(10000);
+    }
+
+
+    if(ErrorReadingTemperature == true){
+      UserSounds.Shutdown();
+      digitalWrite(ShutdownESP32, HIGH); //To shutdown all
+      Play = false; 
     }
     
     delay(200);
