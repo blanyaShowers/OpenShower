@@ -220,10 +220,9 @@ void loop()
       message += String(incomingChar);
     }
     else{ 
-      if (message[0] == 't'){
+      if (message.length() > 0 && message[0] == 't'){
 
-          String strNew = message.substring(2,4);
-          float tempFromUser = strNew.toFloat();
+          float tempFromUser = message.substring(2,4).toFloat();
           
           if(tempFromUser > 45.0 || tempFromUser == 0.0){
             UserSounds.Error();
@@ -233,6 +232,7 @@ void loop()
             preferences.begin("blanya-settings", false);
             preferences.putFloat("max_temp", tempFromUser);
             DesiredTemperature = preferences.getFloat("max_temp");
+            preferences.end();
             SerialBT.println(DesiredTemperature); 
             UserSounds.Sucess();
             }
@@ -329,20 +329,21 @@ void loop2(void * pvParameters)
     lv_label_set_text(ui_NumPressureBottom, String(averagePressure2, 0).c_str());
     lv_label_set_text(ui_NumBattery, String(batteryPercentage, 0).c_str());
 
-    vTaskDelay(10);
+    vTaskDelay(5);
 
   }
 }
 
 void ShowerPlanner()
 {
+
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate < 200) return;
+    lastUpdate = millis();
+  
     // Non stop execution time
 
-    if(Play){
-      lv_label_set_text(ui_ButtonStart, "Pause");
-    } else {
-      lv_label_set_text(ui_ButtonStart, "Play");
-    }
+    lv_label_set_text(ui_ButtonStart, Play ? "Pause" : "Play");
 
     if(MainPower){
 
@@ -396,12 +397,12 @@ void ShowerPlanner()
     }
 
 
+/*
     if(ErrorReadingTemperature == true){
       UserSounds.Shutdown();
       digitalWrite(ShutdownESP32, HIGH); //To shutdown all
       Play = false; 
     }
-    
-    delay(200);
+*/
 
 }
