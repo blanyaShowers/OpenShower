@@ -8,13 +8,15 @@ class Sounds
 {
 public:
   Sounds(int port);
-  void Temperature();
+  void playMelody(const int melody[], const int durations[], int numNotes, int baseDuration = 500);
+  void TemperatureReached();
   void Start();
-  void Sucess();
+  void Success();
   void Error();
   void Shutdown();
   void BluetoothNewPreference();
   void NewMQTTPreference();
+  void OneClick();
 private:
   int _port; 
 };

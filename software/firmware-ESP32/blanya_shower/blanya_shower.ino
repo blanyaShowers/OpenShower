@@ -5,20 +5,31 @@
 #include <OneWire.h> 
 #include <DallasTemperature.h> 
 #include <Adafruit_NeoPixel.h>
-#include <BluetoothSerial.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include "ui.h"
 
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+
+
 /* Other used Ports 
 Check screen ports .\libraries\TFT_eSPI\User_Setups\Setup46_GC9A01_ESP32.h
 */
 
-// Check if Bluetooth configs are enabled
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+
+BLEServer* pServer;
+BLEService* pService;
+BLECharacteristic* pCharacteristic;
+bool deviceConnected = false;
+
 
 const int MY_DISP_HOR_RES = 240;
 
@@ -43,7 +54,6 @@ static lv_color_t buf[screenWidth * 10];
 #define ShutdownESP32 25  
 #define TransOnHeatElement 26
 #define NeopixelOut 27        
-
 
 #define NUMPIXELS 8
 
@@ -73,6 +83,7 @@ int totalReadingsMainPower = 0;
 double averageMainPowerReading = 0;
 
 
+
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ReadTemperature);
 DallasTemperature temperatureSensor(&oneWire);
@@ -84,7 +95,7 @@ Sounds UserSounds = Sounds(PWMSound);
 Adafruit_NeoPixel pixels(NUMPIXELS, NeopixelOut, NEO_GRB + NEO_KHZ800);
 
 // Create an instance of the BluetoothSerial class
-BluetoothSerial SerialBT;
+
 Preferences preferences;
 
 static lv_obj_t * ta;
@@ -138,6 +149,63 @@ void my_disp_flush( lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *colo
 
     lv_disp_flush_ready( disp );
 }
+
+void initiateShutdown() {
+    UserSounds.Shutdown();
+    digitalWrite(ShutdownESP32, HIGH);
+    Play = false;
+}
+
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) { deviceConnected = true; }
+    void onDisconnect(BLEServer* pServer) { 
+        deviceConnected = false; 
+        pServer->startAdvertising(); // Restart advertising on disconnect
+    }
+};
+
+class MyCharCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* pChar) {
+        std::string value = pChar->getValue();
+        if (value.empty()) {
+            Serial.println("Error: Empty BLE value received");
+            UserSounds.Error();
+            return;
+        }
+
+        char command = value[0];
+        switch(command) {
+            case 't':
+                try {
+                    float tempFromUser = std::stof(value.substr(2,4));
+                    if(tempFromUser > 45 || tempFromUser <= 0.0f) {
+                        Serial.printf("Error: Invalid temperature %.1f\n", tempFromUser);
+                        UserSounds.Error();
+                        return;
+                    }
+                    
+                    preferences.begin("blanya-settings", false);
+                    preferences.putFloat("max_temp", tempFromUser);
+                    DesiredTemperature = tempFromUser;
+                    preferences.end();
+                    UserSounds.BluetoothNewPreference();
+                }
+                catch (const std::exception& e) {
+                    Serial.printf("Error parsing temperature: %s\n", e.what());
+                    UserSounds.Error();
+                }
+                break;
+
+            case 's':
+                initiateShutdown();
+                break;
+
+            default:
+                Serial.printf("Error: Unknown command '%c'\n", command);
+                UserSounds.Error();
+        }
+    }
+};
 
 
 void setup()
@@ -197,10 +265,28 @@ void setup()
     NULL,      // Task handle.
     0          // Core where the task should run
   );
-
-  SerialBT.begin("blanya-shower");
   
-  UserSounds.Sucess();
+  UserSounds.Start();
+
+  BLEDevice::init("Blanya OS V1.0");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  
+  pService = pServer->createService(SERVICE_UUID);
+  pCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE |
+      BLECharacteristic::PROPERTY_NOTIFY
+  ); 
+  
+  pCharacteristic->setCallbacks(new MyCharCallbacks());
+  pCharacteristic->setValue("Initial Value");
+  pService->start();
+  
+  BLEAdvertising* pAdvertising = pServer->getAdvertising();
+  pAdvertising->start();
+  Serial.println("BLE Ready!");
 
 }
 
@@ -210,37 +296,21 @@ void airPumpIn(int value){
 
 
 void loop()
-{ 
-  
- if (SerialBT.available()){  
-  
-    char incomingChar = SerialBT.read();
-  
-    if (incomingChar != '\n'){
-      message += String(incomingChar);
-    }
-    else{ 
-      if (message.length() > 0 && message[0] == 't'){
+{  
+    if (deviceConnected) {
+      UserSounds.BluetoothNewPreference();
 
-          float tempFromUser = message.substring(2,4).toFloat();
-          
-          if(tempFromUser > 45.0 || tempFromUser == 0.0){
-            UserSounds.Error();
-            SerialBT.println("Unsafe Temperature"); 
-          }
-          else {
-            preferences.begin("blanya-settings", false);
-            preferences.putFloat("max_temp", tempFromUser);
-            DesiredTemperature = preferences.getFloat("max_temp");
-            preferences.end();
-            SerialBT.println(DesiredTemperature); 
-            UserSounds.Sucess();
-            }
-          }
-          
-          message = "";
-      } 
+        
+        // Update characteristic value
+        pCharacteristic->setValue("String value Hi!");
+        
+        // Send notification to connected client
+        pCharacteristic->notify();
+      
     }
+    else {
+            
+      }
 
     temperatureSensor.requestTemperatures();
     if (TemperatureCelsius != DEVICE_DISCONNECTED_C)
@@ -280,7 +350,7 @@ void loop2(void * pvParameters)
     lv_timer_handler();
     
     if(analogRead(ReadMainButton) > 1000) {
-    UserSounds.Sucess();
+    UserSounds.OneClick();
       if(unique) {
         int colors [3] = {220,20,60};
         PixelsLight(colors); 
@@ -356,7 +426,7 @@ void ShowerPlanner()
      if (TemperatureCelsius > DesiredTemperature)
         {
           digitalWrite(TransOnHeatElement, LOW); // Shutdown relay
-          UserSounds.Temperature();  // Alert the user that the water is ready     
+          UserSounds.TemperatureReached();  // Alert the user that the water is ready     
           Play = false;
         }
 
