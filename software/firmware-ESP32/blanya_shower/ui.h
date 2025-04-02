@@ -35,17 +35,21 @@ extern lv_obj_t * ui_Button1;
 extern lv_obj_t * ui_ButtonStart;
 extern lv_obj_t * ui_labBattery;
 extern lv_obj_t * ui_labPressureBottom;
-extern lv_obj_t * ui_labPressureTop;
 extern lv_obj_t * ui_NumBattery;
-extern lv_obj_t * ui_NumPressureTop;
 extern lv_obj_t * ui_NumPressureBottom;
 extern lv_obj_t * ui_labUserTemp;
 extern lv_obj_t * ui_NumUserTemp;
+extern lv_obj_t * ui_searching;
+extern lv_obj_t * ui_connected;
 // CUSTOM VARIABLES
 
 // EVENTS
 
 extern lv_obj_t * ui____initial_actions0;
+
+// IMAGES AND IMAGE SETS
+LV_IMG_DECLARE(ui_img_searching_png);    // assets/searching.png
+LV_IMG_DECLARE(ui_img_connected_png);    // assets/connected.png
 
 // UI INIT
 void ui_init(void);

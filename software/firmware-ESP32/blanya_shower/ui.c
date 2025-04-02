@@ -19,12 +19,12 @@ lv_obj_t * ui_Button1;
 lv_obj_t * ui_ButtonStart;
 lv_obj_t * ui_labBattery;
 lv_obj_t * ui_labPressureBottom;
-lv_obj_t * ui_labPressureTop;
 lv_obj_t * ui_NumBattery;
-lv_obj_t * ui_NumPressureTop;
 lv_obj_t * ui_NumPressureBottom;
 lv_obj_t * ui_labUserTemp;
 lv_obj_t * ui_NumUserTemp;
+lv_obj_t * ui_searching;
+lv_obj_t * ui_connected;
 // CUSTOM VARIABLES
 
 // EVENTS

@@ -87,16 +87,6 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_color(ui_labPressureBottom, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_labPressureBottom, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_labPressureTop = lv_label_create(ui_Screen1);
-    lv_obj_set_width(ui_labPressureTop, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_labPressureTop, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_labPressureTop, -78);
-    lv_obj_set_y(ui_labPressureTop, 23);
-    lv_obj_set_align(ui_labPressureTop, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_labPressureTop, "P.Top");
-    lv_obj_set_style_text_color(ui_labPressureTop, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_labPressureTop, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-
     ui_NumBattery = lv_label_create(ui_Screen1);
     lv_obj_set_width(ui_NumBattery, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_NumBattery, LV_SIZE_CONTENT);    /// 1
@@ -107,16 +97,6 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_text_color(ui_NumBattery, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_NumBattery, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_NumBattery, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    ui_NumPressureTop = lv_label_create(ui_Screen1);
-    lv_obj_set_width(ui_NumPressureTop, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_NumPressureTop, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_NumPressureTop, -78);
-    lv_obj_set_y(ui_NumPressureTop, 46);
-    lv_obj_set_align(ui_NumPressureTop, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_NumPressureTop, "0");
-    lv_obj_set_style_text_color(ui_NumPressureTop, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_NumPressureTop, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_NumPressureBottom = lv_label_create(ui_Screen1);
     lv_obj_set_width(ui_NumPressureBottom, LV_SIZE_CONTENT);   /// 1
@@ -134,7 +114,7 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_x(ui_labUserTemp, -75);
     lv_obj_set_y(ui_labUserTemp, -52);
     lv_obj_set_align(ui_labUserTemp, LV_ALIGN_CENTER);
-    lv_label_set_text(ui_labUserTemp, "User\nTemp");
+    lv_label_set_text(ui_labUserTemp, "Desired\nTemp");
     lv_obj_set_style_text_color(ui_labUserTemp, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_labUserTemp, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(ui_labUserTemp, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -149,6 +129,26 @@ void ui_Screen1_screen_init(void)
     lv_label_set_text(ui_NumUserTemp, "0");
     lv_obj_set_style_text_color(ui_NumUserTemp, lv_color_hex(0x1A9CC2), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_NumUserTemp, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_searching = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_searching, &ui_img_searching_png);
+    lv_obj_set_width(ui_searching, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_searching, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_searching, -76);
+    lv_obj_set_y(ui_searching, 33);
+    lv_obj_set_align(ui_searching, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_searching, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_searching, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+
+    ui_connected = lv_img_create(ui_Screen1);
+    lv_img_set_src(ui_connected, &ui_img_connected_png);
+    lv_obj_set_width(ui_connected, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_height(ui_connected, LV_SIZE_CONTENT);    /// 1
+    lv_obj_set_x(ui_connected, -76);
+    lv_obj_set_y(ui_connected, 36);
+    lv_obj_set_align(ui_connected, LV_ALIGN_CENTER);
+    lv_obj_add_flag(ui_connected, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
+    lv_obj_clear_flag(ui_connected, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
 
 }

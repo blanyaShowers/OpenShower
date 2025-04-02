@@ -20,14 +20,18 @@
 Check screen ports .\libraries\TFT_eSPI\User_Setups\Setup46_GC9A01_ESP32.h
 */
 
-
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-
+#define CHARACTERISTIC_UUID BLEUUID((uint16_t)0x2A1C)
+#define CHARAC_UUID_SET_TEMPERATURE "e7810a71-73ae-499d-8c85-beb7aaedc10b"
+#define CHARAC_UUID_SET_EXPERIENCE "9bca40c9-a1c4-4769-a52a-6412269d6f42"
 
 BLEServer* pServer;
 BLEService* pService;
-BLECharacteristic* pCharacteristic;
+
+BLECharacteristic* pCharCurrentTemp;
+BLECharacteristic* pCharDesiredTemp;
+BLECharacteristic* pCharDesiredExperience;
+
 bool deviceConnected = false;
 
 
@@ -150,10 +154,16 @@ void my_disp_flush( lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *colo
     lv_disp_flush_ready( disp );
 }
 
+void airPumpIn(int value){
+  analogWrite(PINA, value); 
+}
+
 void initiateShutdown() {
     UserSounds.Shutdown();
     digitalWrite(ShutdownESP32, HIGH);
     Play = false;
+    airPumpIn(0);
+    delay(10000);
 }
 
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -164,20 +174,19 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
-class MyCharCallbacks: public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pChar) {
-        std::string value = pChar->getValue();
-        if (value.empty()) {
-            Serial.println("Error: Empty BLE value received");
-            UserSounds.Error();
-            return;
-        }
 
-        char command = value[0];
-        switch(command) {
-            case 't':
+bool indicationAcknowledged = false;
+
+class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
+
+  void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue(); // Get the written value as a string
+        if (value.length() > 0) {
+            // Check which characteristic was written to
+            if (pCharacteristic == pCharDesiredTemp) {
+                // Characteristic 1: Temperature threshold (float, 4 bytes)
                 try {
-                    float tempFromUser = std::stof(value.substr(2,4));
+                    float tempFromUser = std::stof(value);
                     if(tempFromUser > 45 || tempFromUser <= 0.0f) {
                         Serial.printf("Error: Invalid temperature %.1f\n", tempFromUser);
                         UserSounds.Error();
@@ -189,22 +198,33 @@ class MyCharCallbacks: public BLECharacteristicCallbacks {
                     DesiredTemperature = tempFromUser;
                     preferences.end();
                     UserSounds.BluetoothNewPreference();
+                    pCharDesiredTemp->indicate();
                 }
                 catch (const std::exception& e) {
                     Serial.printf("Error parsing temperature: %s\n", e.what());
                     UserSounds.Error();
+                } 
+            }   
+            else if (pCharacteristic == pCharDesiredExperience) {
+                if (value.length() == 4) {
+                    Serial.print("Humidity threshold set to: ");
+                } else {
+                    Serial.println("Invalid data length for humidity threshold");
                 }
-                break;
-
-            case 's':
-                initiateShutdown();
-                break;
-
-            default:
-                Serial.printf("Error: Unknown command '%c'\n", command);
-                UserSounds.Error();
+            }          
         }
     }
+
+    /*
+    void onStatus(BLECharacteristic* pCharDesiredTemp, Status s, uint32_t code) {
+        if (s == BLECharacteristicCallbacks::Status::SUCCESS_INDICATE) {
+            indicationAcknowledged = true;  // Indication successfully acknowledged by client
+        } else {
+            indicationAcknowledged = false;
+        }
+    }
+    */
+    
 };
 
 
@@ -273,15 +293,40 @@ void setup()
   pServer->setCallbacks(new MyServerCallbacks());
   
   pService = pServer->createService(SERVICE_UUID);
-  pCharacteristic = pService->createCharacteristic(
+  
+  pCharCurrentTemp = pService->createCharacteristic(
       CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_NOTIFY 
+  ); 
+
+  BLEDescriptor *pCCCD = new BLEDescriptor(BLEUUID((uint16_t)0x2902));
+  pCharCurrentTemp->addDescriptor(pCCCD);
+  
+  pCharDesiredTemp = pService->createCharacteristic(
+      CHARAC_UUID_SET_TEMPERATURE,
       BLECharacteristic::PROPERTY_READ |
       BLECharacteristic::PROPERTY_WRITE |
-      BLECharacteristic::PROPERTY_NOTIFY
+      BLECharacteristic::PROPERTY_NOTIFY |
+      BLECharacteristic::PROPERTY_INDICATE
   ); 
-  
-  pCharacteristic->setCallbacks(new MyCharCallbacks());
-  pCharacteristic->setValue("Initial Value");
+
+  pCharDesiredExperience = pService->createCharacteristic(
+      CHARAC_UUID_SET_EXPERIENCE,
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE |
+      BLECharacteristic::PROPERTY_NOTIFY |
+      BLECharacteristic::PROPERTY_INDICATE
+  ); 
+
+  BLEDescriptor *CCCD = new BLEDescriptor(BLEUUID((uint16_t)0x2902));
+  pCharDesiredTemp->addDescriptor(CCCD);
+
+  MyCharacteristicCallbacks* callbacks = new MyCharacteristicCallbacks();
+
+  pCharDesiredTemp->setCallbacks(callbacks);
+  pCharDesiredExperience->setCallbacks(callbacks);
+
+
   pService->start();
   
   BLEAdvertising* pAdvertising = pServer->getAdvertising();
@@ -290,23 +335,34 @@ void setup()
 
 }
 
-void airPumpIn(int value){
-  analogWrite(PINA, value); 
-}
-
 
 void loop()
-{  
+{
     if (deviceConnected) {
-      UserSounds.BluetoothNewPreference();
 
-        
-        // Update characteristic value
-        pCharacteristic->setValue("String value Hi!");
-        
-        // Send notification to connected client
-        pCharacteristic->notify();
-      
+      uint8_t flags = 0x00; // Celsius, no timestamp, no type
+      int32_t mantissa = (int32_t)(TemperatureCelsius * 1000); // Convert to milli-degrees
+      uint8_t exponent = 0xFD; // Exponent -3 (10^-3)
+      uint8_t value[5] = {
+          flags,
+          (uint8_t)(mantissa & 0xFF),
+          (uint8_t)((mantissa >> 8) & 0xFF),
+          (uint8_t)((mantissa >> 16) & 0xFF),
+          exponent
+      };
+    
+      pCharCurrentTemp->setValue(value,5); 
+      pCharCurrentTemp->notify(); 
+
+        /*
+        if (indicationAcknowledged) {
+            Serial.println("Indication acknowledged");
+            UserSounds.Start();
+        } else {
+            Serial.println("Indication NOT acknowledged, skipping increment");
+        }
+        */
+
     }
     else {
             
@@ -375,7 +431,7 @@ void loop2(void * pvParameters)
     }
 
     int batteryLevel = analogRead(ReadBatteryPower);
-    double pTop = analogRead(ReadPressureTop);
+    //double pTop = analogRead(ReadPressureTop);
     double pBottom = analogRead(ReadPressureBottom);
 
 
@@ -395,7 +451,7 @@ void loop2(void * pvParameters)
 
     lv_label_set_text(ui_NumTemperature, String(TemperatureCelsius, 1).c_str()); 
     lv_label_set_text(ui_NumUserTemp, String(DesiredTemperature, 1).c_str());
-    lv_label_set_text(ui_NumPressureTop, String(pTop, 0).c_str());
+    //lv_label_set_text(ui_NumPressureTop, String(pTop, 0).c_str());
     lv_label_set_text(ui_NumPressureBottom, String(averagePressure2, 0).c_str());
     lv_label_set_text(ui_NumBattery, String(batteryPercentage, 0).c_str());
 
@@ -460,10 +516,7 @@ void ShowerPlanner()
 
 
     if(PendingToShutdown && Battery) {
-      airPumpIn(0);
-      UserSounds.Shutdown();
-      digitalWrite(ShutdownESP32, HIGH); //To shutdown all
-      delay(10000);
+      initiateShutdown();
     }
 
 
