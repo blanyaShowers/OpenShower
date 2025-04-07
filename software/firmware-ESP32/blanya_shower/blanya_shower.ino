@@ -6,10 +6,12 @@
 #include <DallasTemperature.h> 
 #include <Adafruit_NeoPixel.h>
 #include <Preferences.h>
-#include <ArduinoJson.h>
 #include <lvgl.h>
 #include "ui.h"
 
+#include <FS.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
 
 #include <BLEDevice.h>
 #include <BLEUtils.h>
@@ -32,8 +34,7 @@ BLECharacteristic* pCharCurrentTemp;
 BLECharacteristic* pCharDesiredTemp;
 BLECharacteristic* pCharDesiredExperience;
 
-bool deviceConnected = false;
-
+bool BTConnected = false;
 
 const int MY_DISP_HOR_RES = 240;
 
@@ -43,8 +44,8 @@ static const uint32_t screenHeight = 240;
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf[screenWidth * 10];
 
-#define PINA 12
-#define PINB 14
+#define MOTOR_PIN1 12
+#define MOTOR_PIN2 14
 
 #define ReadBatteryPower 36
 #define ReadMainPower 39
@@ -62,31 +63,36 @@ static lv_color_t buf[screenWidth * 10];
 #define NUMPIXELS 8
 
 float DesiredTemperature;
+String ShowerExperience;
 bool PendingToShutdown = false;
 bool Battery = false;
 bool MainPower = false;
 double TemperatureCelsius = 0;
 bool Play = false;
-String message = "";
 bool ErrorReadingTemperature = false;
 double rMainPower = 0;
 
 bool unique = true;
 int BatteryReadings [6] = {0,0,0,0,0,0};
 int readIndex = 0;
+int motorSpeed = 0;
 int totalReadingsBattery = 0;
 double averageBatteryReading = 0;
 
 int pressure2Readings [6] = {0,0,0,0,0,0};
 int totalReadingPressure2 = 0;
-double averagePressure2 = 0;
+double averagePressureBottom = 0;
 
 int mainPowerReadings [6] = {0,0,0,0,0,0};
 int readIndexMainPower = 0;
 int totalReadingsMainPower = 0;
 double averageMainPowerReading = 0;
 
+int firstClick = 0;
+int currentIndex = 0;
 
+
+DynamicJsonDocument doc(1224); // Adjust capacity as needed
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ReadTemperature);
@@ -97,8 +103,6 @@ TFT_eSPI tft = TFT_eSPI();
 Sounds UserSounds = Sounds(PWMSound);
 
 Adafruit_NeoPixel pixels(NUMPIXELS, NeopixelOut, NEO_GRB + NEO_KHZ800);
-
-// Create an instance of the BluetoothSerial class
 
 Preferences preferences;
 
@@ -112,7 +116,16 @@ void PixelsLight(int arr[3])
 {
   pixels.clear(); // Set all pixel colors to 'off'
   pixels.fill(pixels.Color(arr[0],arr[1],arr[2]));
-  pixels.setBrightness(105);
+  pixels.setBrightness(255);
+  pixels.show(); // Send the updated pixel colors to the hardware.
+
+}
+
+void PixelsLight(int intensity, int arr[3])
+{
+  pixels.clear(); // Set all pixel colors to 'off'
+  pixels.fill(pixels.Color(arr[0],arr[1],arr[2]));
+  pixels.setBrightness(intensity);
   pixels.show(); // Send the updated pixel colors to the hardware.
 
 }
@@ -155,7 +168,7 @@ void my_disp_flush( lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *colo
 }
 
 void airPumpIn(int value){
-  analogWrite(PINA, value); 
+  analogWrite(MOTOR_PIN1, value); 
 }
 
 void initiateShutdown() {
@@ -167,9 +180,9 @@ void initiateShutdown() {
 }
 
 class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) { deviceConnected = true; }
+    void onConnect(BLEServer* pServer) { BTConnected = true; }
     void onDisconnect(BLEServer* pServer) { 
-        deviceConnected = false; 
+        BTConnected = false; 
         pServer->startAdvertising(); // Restart advertising on disconnect
     }
 };
@@ -198,7 +211,6 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
                     DesiredTemperature = tempFromUser;
                     preferences.end();
                     UserSounds.BluetoothNewPreference();
-                    pCharDesiredTemp->indicate();
                 }
                 catch (const std::exception& e) {
                     Serial.printf("Error parsing temperature: %s\n", e.what());
@@ -206,25 +218,35 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
                 } 
             }   
             else if (pCharacteristic == pCharDesiredExperience) {
-                if (value.length() == 4) {
-                    Serial.print("Humidity threshold set to: ");
-                } else {
-                    Serial.println("Invalid data length for humidity threshold");
+
+                switch (std::stoi(value)) {
+                  case 1:
+                    preferences.begin("blanya-settings", false);
+                    preferences.putString("experience", "forest");
+                    preferences.end();
+                    UserSounds.BluetoothNewPreference();
+                    ESP.restart();
+                    break;
+                    
+                  case 2:
+                    preferences.begin("blanya-settings", false);
+                    preferences.putString("experience", "ocean");
+                    preferences.end();
+                    UserSounds.BluetoothNewPreference();
+                    ESP.restart();
+                    break;
+              
+                  default:
+                    preferences.begin("blanya-settings", false);
+                    preferences.putString("experience", "default");
+                    preferences.end();
+                    UserSounds.BluetoothNewPreference();
+                    ESP.restart();
+                    break;
                 }
             }          
         }
-    }
-
-    /*
-    void onStatus(BLECharacteristic* pCharDesiredTemp, Status s, uint32_t code) {
-        if (s == BLECharacteristicCallbacks::Status::SUCCESS_INDICATE) {
-            indicationAcknowledged = true;  // Indication successfully acknowledged by client
-        } else {
-            indicationAcknowledged = false;
-        }
-    }
-    */
-    
+    } 
 };
 
 
@@ -237,8 +259,8 @@ void setup()
   pinMode(ShutdownESP32, OUTPUT);
   pinMode(TransOnSolenoidMotor, OUTPUT);
   
-  analogWrite(PINA, 0);
-  analogWrite(PINB, 0);
+  analogWrite(MOTOR_PIN1, 0);
+  analogWrite(MOTOR_PIN2, 0);
       
   tft.init();
   tft.setRotation(0);
@@ -255,7 +277,7 @@ void setup()
   /*Initialize `disp_buf` with the buffer(s). With only one buffer use NULL instead buf_2 */
   lv_disp_draw_buf_init(&draw_buf, buf, NULL, screenWidth * 10);
 
-    /*Initialize the display*/
+  /*Initialize the display*/
   static lv_disp_drv_t disp_drv;
   lv_disp_drv_init(&disp_drv);
 
@@ -274,6 +296,7 @@ void setup()
 
   preferences.begin("blanya-settings", false);
   DesiredTemperature = preferences.getFloat("max_temp",30.00);
+  ShowerExperience = preferences.getString("experience","default");
   preferences.end();
 
   xTaskCreatePinnedToCore (
@@ -318,14 +341,9 @@ void setup()
       BLECharacteristic::PROPERTY_INDICATE
   ); 
 
-  BLEDescriptor *CCCD = new BLEDescriptor(BLEUUID((uint16_t)0x2902));
-  pCharDesiredTemp->addDescriptor(CCCD);
-
   MyCharacteristicCallbacks* callbacks = new MyCharacteristicCallbacks();
-
   pCharDesiredTemp->setCallbacks(callbacks);
   pCharDesiredExperience->setCallbacks(callbacks);
-
 
   pService->start();
   
@@ -333,12 +351,41 @@ void setup()
   pAdvertising->start();
   Serial.println("BLE Ready!");
 
+  if (!SPIFFS.begin(true)) { 
+    Serial.println("Failed to mount SPIFFS");
+    return;
+  }
+
+  fs::File file = SPIFFS.open("/"+ShowerExperience+".json", FILE_READ);
+  if (!file) {
+    Serial.println("Failed to open .json");
+    return;
+  }
+
+  // Read file into String (workaround if file.size() fails)
+  String jsonContent = file.readString();
+  file.close();
+
+  Serial.println("File contents:");
+  Serial.println(jsonContent);
+
+  // Parse JSON from String
+  DeserializationError error = deserializeJson(doc, jsonContent);
+  if (error) {
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  Serial.println("JSON file loaded successfully");
+
+  firstClick = 0;
 }
 
 
 void loop()
 {
-    if (deviceConnected) {
+    if (BTConnected) {
 
       uint8_t flags = 0x00; // Celsius, no timestamp, no type
       int32_t mantissa = (int32_t)(TemperatureCelsius * 1000); // Convert to milli-degrees
@@ -354,19 +401,7 @@ void loop()
       pCharCurrentTemp->setValue(value,5); 
       pCharCurrentTemp->notify(); 
 
-        /*
-        if (indicationAcknowledged) {
-            Serial.println("Indication acknowledged");
-            UserSounds.Start();
-        } else {
-            Serial.println("Indication NOT acknowledged, skipping increment");
-        }
-        */
-
-    }
-    else {
-            
-      }
+    } 
 
     temperatureSensor.requestTemperatures();
     if (TemperatureCelsius != DEVICE_DISCONNECTED_C)
@@ -407,9 +442,8 @@ void loop2(void * pvParameters)
     
     if(analogRead(ReadMainButton) > 1000) {
     UserSounds.OneClick();
+    firstClick ++;
       if(unique) {
-        int colors [3] = {220,20,60};
-        PixelsLight(colors); 
         if(Play) {
           Play = false;
         } else {
@@ -426,6 +460,33 @@ void loop2(void * pvParameters)
       unique = false;
     }
     else {
+
+    JsonArray dataArray = doc["data"];
+    if (dataArray.size() > 0 && currentIndex < dataArray.size()) {
+        JsonObject item = dataArray[currentIndex];
+        int duration = item["time"];
+        unsigned long currentMillis = millis(); // Get time
+    
+        static unsigned long itemStartTime = 0;
+        static bool NextRun = true; 
+    
+        if (NextRun) {
+            itemStartTime = currentMillis; // Save time
+            NextRun = false;
+            JsonArray lightColor = item["lc"];
+            int colors[3] = {lightColor[1], lightColor[2], lightColor[3]};
+            motorSpeed = item["power"];
+            PixelsLight(lightColor[0],colors);
+            Serial.println(itemStartTime); 
+        }
+    
+        // Verify Time
+        if (currentMillis - itemStartTime >= (unsigned long)duration) {
+            currentIndex++;
+            NextRun = true; // Next element
+        }
+    }
+         
       ShowerPlanner();
       unique = true;
     }
@@ -433,7 +494,6 @@ void loop2(void * pvParameters)
     int batteryLevel = analogRead(ReadBatteryPower);
     //double pTop = analogRead(ReadPressureTop);
     double pBottom = analogRead(ReadPressureBottom);
-
 
     totalReadingsBattery -= BatteryReadings[readIndex];
     BatteryReadings[readIndex] = batteryLevel;
@@ -445,15 +505,23 @@ void loop2(void * pvParameters)
     totalReadingPressure2 -= pressure2Readings[readIndex];
     pressure2Readings[readIndex] = pBottom;
     totalReadingPressure2 += pBottom;
-    averagePressure2 = totalReadingPressure2 / 6;  
+    averagePressureBottom = totalReadingPressure2 / 6;  
 
     readIndex = (readIndex +1) % 6;
 
-    lv_label_set_text(ui_NumTemperature, String(TemperatureCelsius, 1).c_str()); 
+    lv_label_set_text(ui_NumTemperature, ErrorReadingTemperature ? "ERT" : String(TemperatureCelsius, 1).c_str());    
     lv_label_set_text(ui_NumUserTemp, String(DesiredTemperature, 1).c_str());
-    //lv_label_set_text(ui_NumPressureTop, String(pTop, 0).c_str());
-    lv_label_set_text(ui_NumPressureBottom, String(averagePressure2, 0).c_str());
-    lv_label_set_text(ui_NumBattery, String(batteryPercentage, 0).c_str());
+    lv_label_set_text(ui_NumPressureBottom, String(averagePressureBottom, 0).c_str());
+
+
+    if (BTConnected) {
+      lv_obj_add_flag(ui_searching,LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(ui_connected,LV_OBJ_FLAG_HIDDEN);
+    }
+    else {
+      lv_obj_clear_flag(ui_searching,LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(ui_connected,LV_OBJ_FLAG_HIDDEN);  
+      }
 
     vTaskDelay(5);
 
@@ -466,18 +534,15 @@ void ShowerPlanner()
     static unsigned long lastUpdate = 0;
     if (millis() - lastUpdate < 200) return;
     lastUpdate = millis();
-  
     // Non stop execution time
 
     lv_label_set_text(ui_ButtonStart, Play ? "Pause" : "Play");
 
     if(MainPower){
 
-     lv_obj_add_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
+     lv_img_set_src(ui_default, &ui_img_electric_png);
 
      digitalWrite(TransOnSolenoidMotor, LOW); // To avoid pressure accumulation
-     int colors [3] = {255,69,0};
-     PixelsLight(colors);  
           
      if (TemperatureCelsius > DesiredTemperature)
         {
@@ -486,7 +551,7 @@ void ShowerPlanner()
           Play = false;
         }
 
-      if(Play && averagePressure2 > 10){
+      if(Play && averagePressureBottom > 10){
           digitalWrite(TransOnHeatElement, HIGH); // Start relay, heat water.
           airPumpIn(220);
       }
@@ -499,33 +564,31 @@ void ShowerPlanner()
 
     
     if(Battery){
+
+     lv_img_set_src(ui_default, &ui_img_default_png);
+
      digitalWrite(TransOnHeatElement, LOW); // Shutdown relay
-     digitalWrite(TransOnSolenoidMotor, HIGH); // Pressure accumulation
-     int colors [3] = {255,255,255};
-     PixelsLight(colors);  
-     
+     if(firstClick >= 1){
+        digitalWrite(TransOnSolenoidMotor, HIGH); // Pressure accumulation
+     }
       if(Play){
-         airPumpIn(255);
-         lv_obj_add_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
+         airPumpIn(motorSpeed);
+         
       }
       else {
          airPumpIn(0);
-         lv_obj_clear_flag(ui_NumBattery, LV_OBJ_FLAG_HIDDEN);
+         
+         // Implement security to avoid pressure accumulation if the user fills the tank when it is in use
         }
     }
-
 
     if(PendingToShutdown && Battery) {
       initiateShutdown();
     }
 
-
-/*
     if(ErrorReadingTemperature == true){
-      UserSounds.Shutdown();
-      digitalWrite(ShutdownESP32, HIGH); //To shutdown all
+      UserSounds.Error();
       Play = false; 
     }
-*/
 
 }
