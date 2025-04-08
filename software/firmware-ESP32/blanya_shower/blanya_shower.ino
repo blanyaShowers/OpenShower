@@ -76,6 +76,7 @@ bool unique = true;
 int BatteryReadings [6] = {0,0,0,0,0,0};
 int readIndex = 0;
 int motorSpeed = 0;
+int motorSpeedMP = 0;
 int totalReadingsBattery = 0;
 double averageBatteryReading = 0;
 
@@ -446,7 +447,9 @@ void loop2(void * pvParameters)
       if(unique) {
         if(Play) {
           Play = false;
+          lv_obj_clear_flag(ui_batterylevel,LV_OBJ_FLAG_HIDDEN);
         } else {
+          lv_obj_add_flag(ui_batterylevel,LV_OBJ_FLAG_HIDDEN);
           Play = true;
         }
         delay(800);
@@ -459,34 +462,7 @@ void loop2(void * pvParameters)
       }
       unique = false;
     }
-    else {
-
-    JsonArray dataArray = doc["data"];
-    if (dataArray.size() > 0 && currentIndex < dataArray.size()) {
-        JsonObject item = dataArray[currentIndex];
-        int duration = item["time"];
-        unsigned long currentMillis = millis(); // Get time
-    
-        static unsigned long itemStartTime = 0;
-        static bool NextRun = true; 
-    
-        if (NextRun) {
-            itemStartTime = currentMillis; // Save time
-            NextRun = false;
-            JsonArray lightColor = item["lc"];
-            int colors[3] = {lightColor[1], lightColor[2], lightColor[3]};
-            motorSpeed = item["power"];
-            PixelsLight(lightColor[0],colors);
-            Serial.println(itemStartTime); 
-        }
-    
-        // Verify Time
-        if (currentMillis - itemStartTime >= (unsigned long)duration) {
-            currentIndex++;
-            NextRun = true; // Next element
-        }
-    }
-         
+    else {      
       ShowerPlanner();
       unique = true;
     }
@@ -512,7 +488,7 @@ void loop2(void * pvParameters)
     lv_label_set_text(ui_NumTemperature, ErrorReadingTemperature ? "ERT" : String(TemperatureCelsius, 1).c_str());    
     lv_label_set_text(ui_NumUserTemp, String(DesiredTemperature, 1).c_str());
     lv_label_set_text(ui_NumPressureBottom, String(averagePressureBottom, 0).c_str());
-
+    lv_label_set_text(ui_batterylevel, (String(batteryPercentage, 0) + "%").c_str());
 
     if (BTConnected) {
       lv_obj_add_flag(ui_searching,LV_OBJ_FLAG_HIDDEN);
@@ -523,6 +499,23 @@ void loop2(void * pvParameters)
       lv_obj_add_flag(ui_connected,LV_OBJ_FLAG_HIDDEN);  
       }
 
+    lv_label_set_text(ui_ButtonStart, Play ? "Pause" : "Play");
+          
+    if(MainPower){
+        lv_img_set_src(ui_default, &ui_img_electric_png);
+      }
+
+     if(Battery){
+        if(ShowerExperience == "ocean"){
+          lv_img_set_src(ui_default, &ui_img_ocean_png); //set icon theme 
+        } else if (ShowerExperience == "forest"){
+          lv_img_set_src(ui_default, &ui_img_forest_png); 
+        } else if (ShowerExperience == "default") {
+          lv_img_set_src(ui_default, &ui_img_default_png); 
+          }  
+      }
+            
+    
     vTaskDelay(5);
 
   }
@@ -530,17 +523,33 @@ void loop2(void * pvParameters)
 
 void ShowerPlanner()
 {
+  
+    unsigned long currentMillis = millis(); // Get time  
 
-    static unsigned long lastUpdate = 0;
-    if (millis() - lastUpdate < 200) return;
-    lastUpdate = millis();
-    // Non stop execution time
-
-    lv_label_set_text(ui_ButtonStart, Play ? "Pause" : "Play");
-
+    if(PendingToShutdown && Battery) {
+      initiateShutdown();
+    }
+    
     if(MainPower){
 
-     lv_img_set_src(ui_default, &ui_img_electric_png);
+    static unsigned long previousMillis = 0;
+    const unsigned long interval = 2000; 
+  
+    if (currentMillis - previousMillis >= interval) {
+      previousMillis = currentMillis;
+  
+      unsigned long seconds = currentMillis / 2000;
+      int color[] = {255, 100, 0};
+          
+      if (seconds % 2 == 0) {
+        PixelsLight(255,color);
+        motorSpeedMP = 255;
+      } else {
+        PixelsLight(200,color);
+        motorSpeedMP = 200;
+      }
+      
+    }
 
      digitalWrite(TransOnSolenoidMotor, LOW); // To avoid pressure accumulation
           
@@ -553,7 +562,7 @@ void ShowerPlanner()
 
       if(Play && averagePressureBottom > 10){
           digitalWrite(TransOnHeatElement, HIGH); // Start relay, heat water.
-          airPumpIn(220);
+          airPumpIn(motorSpeedMP);
       }
       else {
           digitalWrite(TransOnHeatElement, LOW); // Stop relay.
@@ -565,26 +574,47 @@ void ShowerPlanner()
     
     if(Battery){
 
-     lv_img_set_src(ui_default, &ui_img_default_png);
-
      digitalWrite(TransOnHeatElement, LOW); // Shutdown relay
      if(firstClick >= 1){
         digitalWrite(TransOnSolenoidMotor, HIGH); // Pressure accumulation
      }
       if(Play){
          airPumpIn(motorSpeed);
-         
       }
       else {
          airPumpIn(0);
          
          // Implement security to avoid pressure accumulation if the user fills the tank when it is in use
         }
+
+
+    JsonArray dataArray = doc["data"];
+    if (dataArray.size() > 0 && currentIndex < dataArray.size()) {
+        JsonObject item = dataArray[currentIndex];
+        int duration = item["time"];
+
+        static unsigned long itemStartTime = 0;
+        static bool NextRun = true; 
+    
+        if (NextRun) {
+            itemStartTime = currentMillis; // Save time
+            NextRun = false;
+            JsonArray lightColor = item["lc"];
+            int colors[3] = {lightColor[1], lightColor[2], lightColor[3]};
+            motorSpeed = item["power"];
+            PixelsLight(lightColor[0],colors);
+            Serial.println(itemStartTime); 
+        }
+    
+        // Verify Time
+        if (currentMillis - itemStartTime >= (unsigned long)duration) {
+            currentIndex++;
+            NextRun = true; // Next element
+        }
+      }
     }
 
-    if(PendingToShutdown && Battery) {
-      initiateShutdown();
-    }
+
 
     if(ErrorReadingTemperature == true){
       UserSounds.Error();
