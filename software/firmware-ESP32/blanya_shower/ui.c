@@ -27,8 +27,9 @@ lv_obj_t * ui_connected;
 lv_obj_t * ui_default;
 lv_obj_t * ui_batterylevel;
 lv_obj_t * ui_mainpower;
-lv_obj_t * ui_forest;
-lv_obj_t * ui_ocean;
+lv_obj_t * ui_pourover;
+lv_obj_t * ui_tea;
+lv_obj_t * ui_barista;
 // CUSTOM VARIABLES
 lv_obj_t * uic_MainScreen;
 lv_obj_t * uic_default;

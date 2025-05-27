@@ -6,7 +6,8 @@ SET(SOURCES ui_MainScreen.c
     ui_img_connected_png.c
     ui_img_default_png.c
     ui_img_electric_png.c
-    ui_img_forest_png.c
-    ui_img_ocean_png.c)
+    ui_img_pourover_png.c
+    ui_img_tea_png.c
+    ui_img_barista_png.c)
 
 add_library(ui ${SOURCES})

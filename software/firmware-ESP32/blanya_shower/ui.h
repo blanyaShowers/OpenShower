@@ -43,8 +43,9 @@ extern lv_obj_t * ui_connected;
 extern lv_obj_t * ui_default;
 extern lv_obj_t * ui_batterylevel;
 extern lv_obj_t * ui_mainpower;
-extern lv_obj_t * ui_forest;
-extern lv_obj_t * ui_ocean;
+extern lv_obj_t * ui_pourover;
+extern lv_obj_t * ui_tea;
+extern lv_obj_t * ui_barista;
 // CUSTOM VARIABLES
 extern lv_obj_t * uic_MainScreen;
 extern lv_obj_t * uic_default;
@@ -58,8 +59,9 @@ LV_IMG_DECLARE(ui_img_searching_png);    // assets/searching.png
 LV_IMG_DECLARE(ui_img_connected_png);    // assets/connected.png
 LV_IMG_DECLARE(ui_img_default_png);    // assets/default.png
 LV_IMG_DECLARE(ui_img_electric_png);    // assets/electric.png
-LV_IMG_DECLARE(ui_img_forest_png);    // assets/forest.png
-LV_IMG_DECLARE(ui_img_ocean_png);    // assets/ocean.png
+LV_IMG_DECLARE(ui_img_pourover_png);    // assets/PourOver.png
+LV_IMG_DECLARE(ui_img_tea_png);    // assets/Tea.png
+LV_IMG_DECLARE(ui_img_barista_png);    // assets/Barista.png
 
 // UI INIT
 void ui_init(void);
