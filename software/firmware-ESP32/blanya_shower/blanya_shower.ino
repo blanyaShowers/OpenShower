@@ -223,7 +223,7 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
                 switch (std::stoi(value)) {
                   case 1:
                     preferences.begin("blanya-settings", false);
-                    preferences.putString("experience", "p1-Barista");
+                    preferences.putString("experience", "p1-PourOver");
                     preferences.end();
                     UserSounds.BluetoothNewPreference();
                     ESP.restart();
@@ -231,7 +231,7 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
                     
                   case 2:
                     preferences.begin("blanya-settings", false);
-                    preferences.putString("experience", "p2-PourOver");
+                    preferences.putString("experience", "p2-Barista");
                     preferences.end();
                     UserSounds.BluetoothNewPreference();
                     ESP.restart();
@@ -239,7 +239,7 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
 
                   case 3:
                     preferences.begin("blanya-settings", false);
-                    preferences.putString("experience", "p3-Tea");
+                    preferences.putString("experience", "p3-Infusion");
                     preferences.end();
                     UserSounds.BluetoothNewPreference();
                     ESP.restart();
@@ -514,11 +514,11 @@ void loop2(void * pvParameters)
       }
 
      if(Battery){
-        if(ShowerExperience == "p1-Barista"){
-          lv_img_set_src(ui_default, &ui_img_barista_png); //set icon theme 
-        } else if (ShowerExperience == "p2-PourOver"){
-          lv_img_set_src(ui_default, &ui_img_pourover_png); 
-        } else if (ShowerExperience == "p3-Tea"){
+        if(ShowerExperience == "p1-PourOver"){
+          lv_img_set_src(ui_default, &ui_img_pourover_png); //set icon theme 
+        } else if (ShowerExperience == "p2-Barista"){
+          lv_img_set_src(ui_default, &ui_img_barista_png); 
+        } else if (ShowerExperience == "p3-Infusion"){
           lv_img_set_src(ui_default, &ui_img_tea_png); 
         } else if (ShowerExperience == "p0-Default") {
           lv_img_set_src(ui_default, &ui_img_default_png); 
