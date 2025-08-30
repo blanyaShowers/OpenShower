@@ -28,3 +28,7 @@ The YouTube video walks through the 18 steps to build the model, showing in deta
 
 [https://www.youtube.com/watch?v=CI9o5aMDqA0](https://www.youtube.com/watch?v=CI9o5aMDqA0)
 
+## Kickstarter:
+It’s time to break free from monotony, inefficiency, and the lack of innovation and new experiences in our showers. 
+
+[https://www.kickstarter.com/projects/blanya/openshower-waste-ends-here?ref=24dbeq](https://www.kickstarter.com/projects/blanya/openshower-waste-ends-here?ref=24dbeq)
