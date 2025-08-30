@@ -5,3 +5,13 @@ OpenShower reinvents the shower experience by eliminating invisible waste and ma
 
 ![os](https://github.com/blanyaShowers/OpenShower/blob/2735794e8e52eace9194dcacd6d06facdca69aed/docs/src/OpenDesign.png)
 
+
+
+##Fusion 360:
+
+The 3D model includes only the printable parts and their placement to help you identify each shower component. Acrylic pipes are shown for reference, but they are not intended to be printed.
+
+Colored View: [https://a360.co/467mWWJ](https://a360.co/467mWWJ)
+
+Black View: [https://a360.co/4nfyCwQ](https://a360.co/4nfyCwQ)
+
