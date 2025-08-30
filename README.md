@@ -7,11 +7,24 @@ OpenShower reinvents the shower experience by eliminating invisible waste and ma
 
 
 
-##Fusion 360:
+## Fusion 360:
 
 The 3D model includes only the printable parts and their placement to help you identify each shower component. Acrylic pipes are shown for reference, but they are not intended to be printed.
 
 Colored View: [https://a360.co/467mWWJ](https://a360.co/467mWWJ)
 
 Black View: [https://a360.co/4nfyCwQ](https://a360.co/4nfyCwQ)
+
+
+## Instructables:
+
+Additional building details based on the YouTube video, plus extra insights about the process.
+
+[https://www.instructables.com/OpenShower-One-Place-for-Sensations-Sophistication/](https://www.instructables.com/OpenShower-One-Place-for-Sensations-Sophistication/)
+
+
+## Youtube:
+The YouTube video walks through the 18 steps to build the model, showing in detail how parts are handled, which tools are used, and extra insights only visible through video.
+
+[https://www.youtube.com/watch?v=CI9o5aMDqA0](https://www.youtube.com/watch?v=CI9o5aMDqA0)
 
